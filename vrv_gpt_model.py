@@ -8,8 +8,9 @@ vrv
 import torch
 import torch.nn as nn
 import tiktoken
-from TransformerBlock import TransformerBlock
-from LayerNorm import LayerNorm
+import transformer.TransformerBlock as TransformerBlock
+
+import layer_norm.LayerNorm as LayerNorm
 
 class GPTModel(nn.Module):
     def __init__(self, cfg):
