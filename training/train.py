@@ -6,15 +6,17 @@ vrv
 '''
 
 import os
+import sys
 import torch
 import urllib.request
 import tiktoken
 
 import matplotlib.pyplot as plt
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from configs import GPT_CONFIG_124M 
-from vrv_gpt_model import GPTModel, generate_text_simple
-from GPTDatasetV1 import create_dataloader_v1
+from vrv_gpt_model import GPTModel, generate_text_simple, generate
+from data.GPTDatasetV1 import create_dataloader_v1
 
 def text_to_token_ids(text, tokenizer):
     encoded = tokenizer.encode(text)
@@ -65,9 +67,16 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     context_size = model.pos_emb.weight.shape[0]
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with torch.no_grad():
+        '''
         token_ids = generate_text_simple(
             model=model, idx=encoded,
             max_new_tokens=50, context_size=context_size
+        )
+        '''
+        token_ids = generate(
+            model=model, idx=encoded,
+            max_new_tokens=50, context_size=context_size,
+            temperature=0.7,top_k=10
         )
         decoded_text = token_ids_to_text(token_ids, tokenizer)
         print(decoded_text.replace("\n", " "))  # Compact print format
@@ -140,9 +149,9 @@ def main(gpt_config, settings):
     # Download data if necessary
     ##############################
 
-    file_path = "the-verdict.txt"
+    file_path = r"D:\vrv_gpt_models\the-verdict.txt"
     url = "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch02/01_main-chapter-code/the-verdict.txt"
-
+    
     if not os.path.exists(file_path):
         with urllib.request.urlopen(url) as response:
             text_data = response.read().decode('utf-8')
@@ -241,5 +250,6 @@ if __name__ == "__main__":
 
     # Save and load model
     torch.save(model.state_dict(), "model.pth")
+    #torch.save({"model_state_dict": model.state_dict(),"optimizer_state_dict": optimizer.state_dict()}, "model.pth")
     model = GPTModel(GPT_CONFIG_124M)
-    model.load_state_dict(torch.load("model.pth"), weights_only=True)
+    model.load_state_dict(state_dict=torch.load("model.pth"), strict=True)
