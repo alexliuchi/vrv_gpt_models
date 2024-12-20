@@ -8,9 +8,10 @@ vrv
 import torch
 import torch.nn as nn
 import tiktoken
-import transformer.TransformerBlock as TransformerBlock
+from transformer.TransformerBlock import TransformerBlock
+from layer_norm.LayerNorm import LayerNorm
 
-import layer_norm.LayerNorm as LayerNorm
+from configs.GPT_CONFIG_124M import GPT_CONFIG_124M
 
 class GPTModel(nn.Module):
     def __init__(self, cfg):
@@ -28,6 +29,7 @@ class GPTModel(nn.Module):
     def forward(self, in_idx):
         batch_size, seq_len = in_idx.shape
         tok_embeds = self.tok_emb(in_idx)
+
         pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
         x = tok_embeds + pos_embeds  # Shape [batch_size, num_tokens, emb_size]
         x = self.drop_emb(x)
@@ -61,21 +63,68 @@ def generate_text_simple(model, idx, max_new_tokens, context_size):
 
     return idx
 
+def generate(model, idx, max_new_tokens, context_size, temperature=0.0, top_k=None, eos_id=None):
+
+    # For-loop is the same as before: Get logits, and only focus on last time step
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -context_size:]
+        with torch.no_grad():
+            logits = model(idx_cond)
+        logits = logits[:, -1, :]
+
+        # New: Filter logits with top_k sampling
+        if top_k is not None:
+            # Keep only top_k values
+            top_logits, _ = torch.topk(logits, top_k)
+            min_val = top_logits[:, -1]
+            logits = torch.where(logits < min_val, torch.tensor(float('-inf')).to(logits.device), logits)
+
+        # New: Apply temperature scaling
+        if temperature > 0.0:
+            logits = logits / temperature
+
+            # Apply softmax to get probabilities
+            probs = torch.softmax(logits, dim=-1)  # (batch_size, context_len)
+
+            # Sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1)  # (batch_size, 1)
+
+        # Otherwise same as before: get idx of the vocab entry with the highest logits value
+        else:
+            idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch_size, 1)
+
+        if idx_next == eos_id:  # Stop generating early if end-of-sequence token is encountered and eos_id is specified
+            break
+
+        # Same as before: append sampled index to the running sequence
+        idx = torch.cat((idx, idx_next), dim=1)  # (batch_size, num_tokens+1)
+
+    return idx
 
 if __name__ == "__main__":
-
-    GPT_CONFIG_124M = {
-        "vocab_size": 50257,     # Vocabulary size
-        "context_length": 1024,  # Context length
-        "emb_dim": 768,          # Embedding dimension
-        "n_heads": 12,           # Number of attention heads
-        "n_layers": 12,          # Number of layers
-        "drop_rate": 0.1,        # Dropout rate
-        "qkv_bias": False        # Query-Key-Value bias
-    }
-
     torch.manual_seed(123)
     model = GPTModel(GPT_CONFIG_124M)
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {total_params:,}")
+    print("Token embedding layer shape:", model.tok_emb.weight.shape)
+    print("Output layer shape:", model.out_head.weight.shape)
+    total_params_gpt2 = (
+        total_params - sum(p.numel() for p in model.tok_emb.parameters())
+    )
+    '''
+    Weight tying reduces the overall memory footprint and computational complexity
+    of the model. However, in my experience, using separate token embedding and out
+    put layers results in better training and model performance
+    '''
+    print(f"Number of trainable parameters "
+          f"considering weight tying: {total_params_gpt2:,}"
+    )
+    #Compute the memory requirements (assuming float32, 4 bytes per parameter)
+    total_size_bytes = total_params * 4
+    total_size_mb = total_size_bytes / (1024 * 1024) # Convert to megabytes
+    print(f"Total size of the model in memory: {total_size_mb:.2f} MB")
+    #[batch_size, num_tokens, vocab_size]
+    
     model.eval()  # disable dropout
 
     start_context = "Hello, I am"
