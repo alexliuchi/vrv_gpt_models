@@ -6,7 +6,7 @@ vrv
 '''
 
 import torch.nn as nn
-from GELU import GELU
+from activation_functions.GELU import GELU
 
 class FeedForward(nn.Module):
     def __init__(self, cfg):
