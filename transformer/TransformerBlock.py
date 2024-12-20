@@ -6,9 +6,9 @@ vrv
 '''
 
 import torch.nn as nn
-import transformer.MultiHeadAttention as MultiHeadAttention
-import feed_forward.FeedForward as FeedForward
-import layer_norm.LayerNorm as LayerNorm
+from transformer.MultiHeadAttention import MultiHeadAttention
+from feed_forward.FeedForward import FeedForward
+from layer_norm.LayerNorm import LayerNorm
 
 class TransformerBlock(nn.Module):
     def __init__(self, cfg):
