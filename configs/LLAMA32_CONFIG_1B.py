@@ -4,6 +4,7 @@ vrv
 @description:
 @date:
 '''
+import torch
 
 LLAMA32_CONFIG_1B = {
     "vocab_size": 128_256,      # Vocabulary size
